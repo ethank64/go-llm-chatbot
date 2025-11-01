@@ -1,0 +1,194 @@
+package gemini
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"google.golang.org/genai"
+)
+
+const ModelName = "gemini-2.5-flash"
+
+type GeminiService struct {
+	client       *genai.Client
+	conversation []*genai.Content
+}
+
+// Method to create a new instance of the service
+func NewService() (*GeminiService, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// If no errors from the client generation,
+	// return the address of a new service instance
+	return &GeminiService{client: client}, nil
+}
+
+// Methods for GeminiService
+
+func (gs *GeminiService) Run() {
+	greetUser()
+
+	reader := bufio.NewScanner(os.Stdin)
+
+	for {
+		fmt.Print("User: ")
+
+		if !reader.Scan() {
+			break
+		}
+
+		prompt := reader.Text()
+		if prompt == "quit" {
+			printGeminiMessage("Goodbye!")
+			return
+		}
+
+		reply, err := gs.Ask(prompt)
+		if err != nil {
+			log.Println("Error: ", err)
+			continue
+		}
+
+		if reply != "" {
+			printGeminiMessage(reply)
+		}
+	}
+}
+
+func (gs *GeminiService) Ask(prompt string) (string, error) {
+	ctx := context.Background()
+
+	// Add user prompt to converation history
+	gs.conversation = append(gs.conversation, &genai.Content{
+		Role:  "user",
+		Parts: []*genai.Part{{Text: prompt}},
+	})
+
+	// Get tool configs
+	tools := GetFunctionSchemas()
+	config := genai.GenerateContentConfig{
+		Tools: tools,
+	}
+
+	// Model invocation
+	result, err := gs.client.Models.GenerateContent(ctx, ModelName, gs.conversation, &config)
+	if err != nil {
+		return "", err
+	}
+
+	reply := ""
+
+	// Get the response
+	candidate := result.Candidates[0]
+
+	// If we have a function call, execute it
+	if len(candidate.Content.Parts) > 0 && candidate.Content.Parts[0].FunctionCall != nil {
+		fc := candidate.Content.Parts[0].FunctionCall
+		gs.HandleFunctionCall(ctx, fc)
+	} else {
+		// Else, we have text response so print it out
+		reply = candidate.Content.Parts[0].Text
+
+		gs.conversation = append(gs.conversation, &genai.Content{
+			Role:  "model",
+			Parts: []*genai.Part{{Text: reply}},
+		})
+	}
+
+	return reply, nil
+}
+
+func (gs *GeminiService) HandleFunctionCall(ctx context.Context, fc *genai.FunctionCall) {
+	switch fc.Name {
+	case "get_current_time":
+		result := map[string]any{
+			"time": getCurrentEST(),
+		}
+		gs.SendFunctionResult(ctx, fc, result)
+
+	case "open_youtube_music":
+		openYoutubeMusic()
+
+		result := map[string]any{
+			"successful": true,
+		}
+
+		gs.SendFunctionResult(ctx, fc, result)
+
+	case "find_file":
+		// Extract search query
+		searchPrompt, _ := fc.Args["searchPrompt"].(string)
+
+		path := findFile(searchPrompt)
+
+		result := map[string]any{
+			"searchPrompt": searchPrompt,
+			"path":         path,
+		}
+
+		gs.SendFunctionResult(ctx, fc, result)
+
+	case "empty_trash":
+		err := emptyTrash()
+
+		successful := true
+		errorMessage := ""
+
+		if err != nil {
+			successful = false
+			errorMessage = err.Error()
+		}
+
+		result := map[string]any{
+			"successful":   successful,
+			"errorMessage": errorMessage,
+		}
+
+		gs.SendFunctionResult(ctx, fc, result)
+
+	default:
+		fmt.Println("Unknown function:", fc.Name)
+	}
+}
+
+func (gs *GeminiService) SendFunctionResult(ctx context.Context, fc *genai.FunctionCall, result map[string]any) {
+	// Append the function call to the history
+	gs.conversation = append(gs.conversation, &genai.Content{
+		Role: "model",
+		Parts: []*genai.Part{
+			{FunctionCall: fc},
+		},
+	})
+
+	// Append function response
+	gs.conversation = append(gs.conversation, &genai.Content{
+		Role: "user",
+		Parts: []*genai.Part{
+			{FunctionResponse: &genai.FunctionResponse{
+				Name:     fc.Name,
+				Response: result,
+			}},
+		},
+	})
+
+	// Send full conversation to Gemini
+	resp, err := gs.client.Models.GenerateContent(ctx, ModelName, gs.conversation, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Append Gemini's text reply
+	gs.conversation = append(gs.conversation, &genai.Content{
+		Role:  "model",
+		Parts: []*genai.Part{{Text: resp.Candidates[0].Content.Parts[0].Text}},
+	})
+
+	printGeminiMessage(resp.Candidates[0].Content.Parts[0].Text)
+}
