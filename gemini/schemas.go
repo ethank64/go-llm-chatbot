@@ -43,6 +43,10 @@ func GetFunctionSchemas() []*genai.Tool {
 					Description: "Opens YouTube Music in the Safari web browser",
 				},
 				{
+					Name:        "open_github",
+					Description: "Opens GitHub in the Safari web browser",
+				},
+				{
 					Name:        "find_file",
 					Description: "Executes a fuzzy search to find its file path",
 					Parameters: &genai.Schema{

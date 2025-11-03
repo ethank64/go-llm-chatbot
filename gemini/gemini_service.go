@@ -13,8 +13,9 @@ import (
 const ModelName = "gemini-2.5-flash"
 
 type GeminiService struct {
-	client       *genai.Client
-	conversation []*genai.Content
+	client            *genai.Client
+	conversation      []*genai.Content
+	systemInstruction *genai.Content
 }
 
 // Method to create a new instance of the service
@@ -77,6 +78,11 @@ func (gs *GeminiService) Ask(prompt string) (string, error) {
 		Tools: tools,
 	}
 
+	// Add system instruction if set
+	if gs.systemInstruction != nil {
+		config.SystemInstruction = gs.systemInstruction
+	}
+
 	// Model invocation
 	result, err := gs.client.Models.GenerateContent(ctx, ModelName, gs.conversation, &config)
 	if err != nil {
@@ -105,6 +111,21 @@ func (gs *GeminiService) Ask(prompt string) (string, error) {
 	return reply, nil
 }
 
+// SetSystemInstruction sets the system instruction for the Gemini service
+func (gs *GeminiService) SetSystemInstruction(instruction string) {
+	gs.systemInstruction = &genai.Content{
+		Parts: []*genai.Part{{Text: instruction}},
+	}
+}
+
+// GetSystemInstruction returns the current system instruction text
+func (gs *GeminiService) GetSystemInstruction() string {
+	if gs.systemInstruction != nil && len(gs.systemInstruction.Parts) > 0 {
+		return gs.systemInstruction.Parts[0].Text
+	}
+	return ""
+}
+
 func (gs *GeminiService) HandleFunctionCall(ctx context.Context, fc *genai.FunctionCall) {
 	switch fc.Name {
 	case "get_current_time":
@@ -115,6 +136,15 @@ func (gs *GeminiService) HandleFunctionCall(ctx context.Context, fc *genai.Funct
 
 	case "open_youtube_music":
 		openYoutubeMusic()
+
+		result := map[string]any{
+			"successful": true,
+		}
+
+		gs.SendFunctionResult(ctx, fc, result)
+
+	case "open_github":
+		openGithub()
 
 		result := map[string]any{
 			"successful": true,
@@ -204,8 +234,16 @@ func (gs *GeminiService) SendFunctionResult(ctx context.Context, fc *genai.Funct
 		},
 	})
 
+	// Prepare config with system instruction if set
+	var config *genai.GenerateContentConfig
+	if gs.systemInstruction != nil {
+		config = &genai.GenerateContentConfig{
+			SystemInstruction: gs.systemInstruction,
+		}
+	}
+
 	// Send full conversation to Gemini
-	resp, err := gs.client.Models.GenerateContent(ctx, ModelName, gs.conversation, nil)
+	resp, err := gs.client.Models.GenerateContent(ctx, ModelName, gs.conversation, config)
 	if err != nil {
 		log.Fatal(err)
 	}

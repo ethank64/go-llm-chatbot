@@ -14,11 +14,7 @@ import (
 	"google.golang.org/genai"
 )
 
-func getCurrentEST() string {
-	loc, _ := time.LoadLocation(("America/New_York"))
-	return time.Now().In(loc).Format("Mon Jan 2 15:04:05 MST 2006")
-}
-
+// Image tools
 // Takes the path to an image and returns the analysis
 func analyzeImage(path string) string {
 	// Read the image file
@@ -168,8 +164,20 @@ func generateImage(prompt string) string {
 	return filePath
 }
 
+// General tools
+
+func getCurrentEST() string {
+	loc, _ := time.LoadLocation(("America/New_York"))
+	return time.Now().In(loc).Format("Mon Jan 2 15:04:05 MST 2006")
+}
+
 func openYoutubeMusic() {
 	cmd := exec.Command("open", "-a", "Safari", "https://music.youtube.com")
+	cmd.Run()
+}
+
+func openGithub() {
+	cmd := exec.Command("open", "-a", "Safari", "https://github.com")
 	cmd.Run()
 }
 
@@ -218,8 +226,3 @@ func emptyTrash() error {
 	// No errors; return nothing
 	return nil
 }
-
-// Tool ideas:
-// Search wikipedia for information
-// Report generation
-// Empty trash

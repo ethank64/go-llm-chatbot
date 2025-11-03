@@ -12,5 +12,7 @@ func main() {
 		log.Fatalf("Failed to create Gemini service: %v: ", err)
 	}
 
+	geminiService.SetSystemInstruction("You are a classy, helpful chatbot named Chap GPT.")
+
 	geminiService.Run()
 }
