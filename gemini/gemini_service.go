@@ -153,6 +153,32 @@ func (gs *GeminiService) HandleFunctionCall(ctx context.Context, fc *genai.Funct
 
 		gs.SendFunctionResult(ctx, fc, result)
 
+	case "analyze_image":
+		// Extract image path
+		imagePath, _ := fc.Args["path"].(string)
+
+		analysis := analyzeImage(imagePath)
+
+		result := map[string]any{
+			"path":     imagePath,
+			"analysis": analysis,
+		}
+
+		gs.SendFunctionResult(ctx, fc, result)
+
+	case "generate_image":
+		// Extract prompt
+		prompt, _ := fc.Args["prompt"].(string)
+
+		filePath := generateImage(prompt)
+
+		result := map[string]any{
+			"prompt":   prompt,
+			"filePath": filePath,
+		}
+
+		gs.SendFunctionResult(ctx, fc, result)
+
 	default:
 		fmt.Println("Unknown function:", fc.Name)
 	}
@@ -184,11 +210,25 @@ func (gs *GeminiService) SendFunctionResult(ctx context.Context, fc *genai.Funct
 		log.Fatal(err)
 	}
 
-	// Append Gemini's text reply
-	gs.conversation = append(gs.conversation, &genai.Content{
-		Role:  "model",
-		Parts: []*genai.Part{{Text: resp.Candidates[0].Content.Parts[0].Text}},
-	})
+	// Check if response has candidates and parts
+	if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
+		// Get the text response if available
+		textResponse := ""
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.Text != "" {
+				textResponse = part.Text
+				break
+			}
+		}
 
-	printGeminiMessage(resp.Candidates[0].Content.Parts[0].Text)
+		// Only append and print if we have a text response
+		if textResponse != "" {
+			gs.conversation = append(gs.conversation, &genai.Content{
+				Role:  "model",
+				Parts: []*genai.Part{{Text: textResponse}},
+			})
+
+			printGeminiMessage(textResponse)
+		}
+	}
 }

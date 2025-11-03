@@ -11,6 +11,20 @@ func GetFunctionSchemas() []*genai.Tool {
 					Description: "Gets the current time in EST",
 				},
 				{
+					Name:        "analyze_image",
+					Description: "Analyzes an image from a local file path and returns a detailed description",
+					Parameters: &genai.Schema{
+						Type: genai.TypeObject,
+						Properties: map[string]*genai.Schema{
+							"path": {
+								Type:        genai.TypeString,
+								Description: "The local file path to the image to analyze",
+							},
+						},
+						Required: []string{"path"},
+					},
+				},
+				{
 					Name:        "generate_image",
 					Description: "Generates an image from a text prompt",
 					Parameters: &genai.Schema{
